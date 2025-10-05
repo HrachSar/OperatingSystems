@@ -3,54 +3,46 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <malloc.h>
 
-#define CHUNK_SIZE 128*1024
+#define CHUNK_SIZE    128*1024
+#define PAGE_SIZE     4096
 #define DEFAULT_ALIGN 8
-#define MAX_CHUNK 128
-#define MAX_BIN 8
+#define MAX_CHUNK     128
+#define MAX_BIN       8
 
 static void *start = NULL;
 static void *end = NULL;
 
-typedef struct{
-	char *start;
-	size_t size;
-} Chunk;
-
-typedef struct{
-	Chunk chunks[CHUNK_SIZE];
-	size_t list_size;
-} ChunkList;
-
-typedef struct FreeList{
-	struct FreeList *next;
-} FreeList;
+typedef struct List{
+	struct List *next;
+} List;
 
 static size_t bin_sizes[MAX_BIN] = {16, 32, 64, 128, 256, 512, 1024, 2048};
 static size_t bin_count[MAX_BIN] = {1024, 512, 256, 128, 64, 32, 16, 8};
-static FreeList *free_list[MAX_BIN] = {NULL};
-static ChunkList alloc_list = {.chunks = {{.start = NULL, .size = 0}}, .list_size = 0};
+static List *free_list[MAX_BIN + 1] = {NULL};
+static List *alloc_list[MAX_BIN + 1] = {NULL};
+static List *mmap_list;
 
 void split_mem();
 void *look_up(size_t size);
 size_t align_memory(size_t size, size_t alignment);
 void request_chunk();
 void *my_malloc(size_t size);
-void insert_chunk(ChunkList *list, void *ptr, size_t mem_size);
+void my_free(void *ptr);
+void *remove_block(List **head, List *p);
+void insert_block(List **list, void *ptr);
+void dump_list(List **list);
 
 //Split 128KB of memory into blocks
 void split_mem(){
-
 	char *p = (char *)start;
 
 	for(int i = 0; i < MAX_BIN; i++){
 		for(int j = 0; j < bin_count[i]; j++){
-			FreeList *b = (FreeList *)p;
+			List *b = (List *)p;
 			b->next = free_list[i];
 			free_list[i] = b;
-			if((uintptr_t *)p + bin_sizes[i] > (uintptr_t *)end)
+			if((uintptr_t)(p + bin_sizes[i]) > (uintptr_t)end)
 				break;
 			p += bin_sizes[i];
 		}
@@ -65,43 +57,58 @@ void *look_up(size_t size){
 				if(free_list[i]){
 					void *block = (void *)free_list[i];
 					free_list[i] = free_list[i]->next;
-
+					
 					*((size_t *)block) = size;
-					insert_chunk(&alloc_list, (void *)((char *)block + sizeof(size_t)), size);
-					printf("%p, %zu ", (void *)((char *)block + sizeof(size_t)), *((size_t *)block));
-					return (void *)((char*)block + sizeof(size_t));
+					void *ptr = (void *)((char*)block + sizeof(size_t));
+					insert_block(&alloc_list[i], ptr);
+					printf("%p, %zu \n", (void *)((char *)block + sizeof(size_t)), *((size_t *)block));
+					return ptr;
 				}
 			}
 		}
 	}else{
-		//split to smaller chunks
-		return NULL;
-	}
-	return NULL;
+		//split to smaller chunks, maybe?
+		//for now just sbrk
+		List *temp = free_list[MAX_BIN];
+		while(temp){
+			size_t free_size = *(size_t *)((char *)temp - sizeof(size_t));
+			if (size <= free_size){
+				void *ptr = remove_block(&free_list[MAX_BIN], temp);
+				insert_block(&alloc_list[MAX_BIN], ptr);
 
+				return ptr;
+			}
+			temp = temp->next;
+		} 
+
+		void *block = sbrk(size);	
+		if(block == (void *)-1){
+			printf("Heap alloc error.\n");
+			return NULL;
+		}
+		*((size_t *)block) = size;
+		void *ptr =  (void *)((char *)block + sizeof(size_t));
+		insert_block(&alloc_list[MAX_BIN], ptr);
+		return ptr;
+	} 
 }
 
-//insert a block into the list for future free() call
-void insert_chunk(ChunkList *list, void *ptr, size_t mem_size){
-
-	if(list->list_size >= MAX_CHUNK){
-		printf("Filled heap\n");
-		return;
-	}
-	list->chunks[list->list_size].start = ptr;
-	list->chunks[list->list_size].size = mem_size;
-	list->list_size++;
-
-	printf("%p, %zu \n", list->chunks[list->list_size - 1].start, 
-				list->chunks[list->list_size - 1].size);
-}
-
-//get the nearest 2's power
-size_t align_memory(size_t size, size_t alignment){
+//insert the pointer into free_list or alloc_list
+void insert_block(List **list, void *ptr){
 	
-	while(alignment < size) alignment <<= 1;
+	List *p = (List *)ptr;
+	List *b = p;
+	b->next = *list;
+	*list = b;
+}
 
-	return alignment;
+//8 byte alignment
+size_t align_memory(size_t size, size_t alignment){
+
+	if(size % alignment == 0)
+		return size;
+
+	return (size + alignment - 1) & ~(alignment - 1);
 }
 
 //request a chunk
@@ -119,7 +126,7 @@ void request_chunk(){
 void *my_malloc(size_t size){
 	if(size < CHUNK_SIZE){
 
-		size_t aligned_mem = align_memory(size, DEFAULT_ALIGN);
+		size_t aligned_mem = align_memory(size + sizeof(size_t), DEFAULT_ALIGN);
 		void *ptr = look_up(aligned_mem);
 		if(!ptr){
 			request_chunk();
@@ -128,14 +135,114 @@ void *my_malloc(size_t size){
 		}
 		return ptr;
 	}else{
-		//call to mmap()
-		return NULL;
+		size_t aligned_mem = align_memory(size + sizeof(size_t), PAGE_SIZE);
+		printf("%zu\n", aligned_mem);
+		void *block = mmap(NULL, aligned_mem, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+		if(block == MAP_FAILED){
+			printf("Heap alloc error.\n");
+			return NULL;
+		}
+		void *ptr = (void *)((char *)block + sizeof(size_t));
+		*(size_t *)block = aligned_mem;
+		insert_block(&mmap_list, ptr);	
+		return ptr;
 	}
-} 
+}
+
+void my_free(void *ptr){
+	
+	if(!ptr)
+		return;
+
+	size_t mem_size = *(size_t *)((char *)ptr - sizeof(size_t));
+	
+	//For medium allocations > 2048 bytes
+	if(mem_size > bin_sizes[MAX_BIN - 1] && mem_size < CHUNK_SIZE){
+		List *p = alloc_list[MAX_BIN];
+		while(p){
+			if(ptr == (void *)p){
+				void *freed = remove_block(&alloc_list[MAX_BIN], p);
+				insert_block(&free_list[MAX_BIN], freed);
+				return;
+			}
+			p = p->next;
+		}		
+	}else if(mem_size > CHUNK_SIZE){ //Large allocations > 128KB
+		List *p = mmap_list;
+		void *block = (void *)((char *)ptr - sizeof(size_t));
+		while(p){
+			if(ptr == (void *)p){
+				void *freed = remove_block(&mmap_list, p);
+				if(munmap(block, mem_size) == -1){
+					printf("mmap free error\n");
+					return;
+				}
+				return;
+			}
+			p = p->next;
+		}
+	}
+	//Small allocations <= 2048 bytes
+	for(int i = 0; i < MAX_BIN; i++){
+		if(bin_sizes[i] == mem_size){
+			List *p = alloc_list[i];
+			while(p){
+				if(ptr == (void *)p){
+					void *freed = remove_block(&alloc_list[i], p);			
+					insert_block(&free_list[i], freed);
+					return;	
+				}
+				p = p->next;
+			}
+		}
+	}
+	printf("Invalid pointer!\n");
+	return;
+}
+
+void *remove_block(List **head, List *p){
+
+	if(!p)
+		return NULL;
+
+	List *prev;
+	List *curr = *head;
+
+	if(curr != NULL && curr == p){
+		*head = curr->next;	
+		return (void *)curr;
+	}
+
+	while(curr != p){
+		prev = curr;
+		curr = curr->next;
+	}
+
+	if(!curr)
+		return NULL;
+
+	prev->next = curr->next;
+	return (void *)curr;
+}
+
+void dump_list(List **list){
+	List *curr = *list;
+
+	while(curr != NULL){
+		printf("%p ", (void *)curr);
+		curr = curr->next;
+	}	
+	printf("End of the list\n");
+}
 
 int main() {
     	
-	void *ptr = my_malloc(5 * sizeof(int));
-
-	return 0;	
+	//dump_list(&free_list[1]);
+	//dump_list(&alloc_list[1]);
+	void *ptr = my_malloc(129*1024);
+	void *ptr2 = my_malloc(130*1024);
+	dump_list(&mmap_list);	
+	my_free(ptr);
+	dump_list(&mmap_list);
+	return 0;
 }
