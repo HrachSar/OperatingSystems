@@ -7,8 +7,8 @@
 #define CHUNK_SIZE    128*1024
 #define PAGE_SIZE     4096
 #define DEFAULT_ALIGN 8
-#define MAX_CHUNK     128
 #define MAX_BIN       12
+#define MAX_MEM	      20
 
 static void *start = NULL;
 static void *end = NULL;
@@ -19,7 +19,8 @@ typedef struct List{
 } List;
 
 static size_t bin_sizes[MAX_BIN] = {24, 32, 40, 48, 56, 64, 72, 128, 256, 512, 1024, 2048};
-static size_t bin_count[MAX_BIN] = {1024, 774, 517, 321, 128, 63, 41, 22, 16, 8, 8, 6};
+static size_t bin_count[MAX_BIN] = {30, 31, 30, 30, 30, 30, 30, 31, 31, 31, 31, 30};
+static size_t alloced_count[MAX_BIN] = {0};
 static List *free_list[MAX_BIN + 1] = {NULL};
 static List *alloc_list[MAX_BIN + 1] = {NULL};
 static List *mmap_list;
@@ -33,6 +34,123 @@ void my_free(void *ptr);
 void *remove_block(List **head, List *p);
 void insert_block(List **list, void *ptr);
 void dump_list(List **list);
+void check_block_counts();
+void *get_contigous_blocks(List **list, size_t block_count, size_t block_size);
+int  split_blocks(int i);
+int  merge_blocks(int i);
+
+void check_block_counts(){
+	for(int i = 0; i < MAX_BIN; i++){
+		if(alloced_count[i] >= MAX_MEM){
+			if(split_blocks(i)){
+				printf("splitting\n");
+			}else{
+				printf("merging\n");
+				merge_blocks(i);
+			}
+		}
+	}
+}
+
+int split_blocks(int i){
+	size_t count_needed = alloced_count[i] - MAX_MEM + 1;
+
+	for(int j = i + 1; j < MAX_BIN; j++){
+		if(bin_sizes[j] % bin_sizes[i] == 0){
+			size_t block_count = bin_sizes[j] / bin_sizes[i];
+			size_t actual_count = (count_needed + block_count - 1) / block_count;
+
+			if(alloced_count[j] + actual_count < MAX_MEM){
+				int k = 0;
+				while(k < actual_count){
+					void *block = remove_block(&free_list[j], free_list[j]);
+					if(!block){
+						printf("Fatal error!\n");
+						return 0;
+					}
+					void *p = block;
+					int l = 0;
+					while (l < block_count){
+						insert_block(&free_list[i], p);
+						alloced_count[i]--;
+						p += bin_sizes[i];
+						l++;	
+					}
+					alloced_count[j]++;
+					k++;
+				}
+				return 1;
+			}
+		}	
+	}
+	return 0;
+}
+
+int merge_blocks(int i){
+	size_t count_needed = alloced_count[i] - MAX_MEM + 1;
+
+	for(int j = 0; j < i; j++){
+		if(bin_sizes[i] % bin_sizes[j] == 0){
+			size_t block_count = bin_sizes[i] / bin_sizes[j];
+			size_t actual_count = count_needed * block_count;
+			printf("%zu %zu\n", bin_sizes[i], bin_sizes[j]);			
+			if(alloced_count[j] + actual_count < MAX_MEM){
+				printf("%zu %zu\n", actual_count, block_count);
+				int k = 0;
+				while(k < count_needed){
+					void *start = get_contigous_blocks(&free_list[j], block_count, bin_sizes[j]);
+					if(!start){
+						printf("No possible merges of memory blocks\n");
+						return 0;
+					}				
+	
+
+					for(int l = 0; l < block_count; l++){
+						remove_block(&free_list[j], (void *)((char *)start + l * bin_sizes[j]));
+					}
+
+					insert_block(&free_list[i], start);
+					alloced_count[i]--;
+					alloced_count[j] += block_count;
+					k++;
+				}	
+				return 1;
+			}
+		}
+	}			
+	return 0;
+}
+
+void *get_contigous_blocks(List **list, size_t block_count, size_t block_size){
+	if(!list || !*list){
+		printf("Invalid list\n");
+		return NULL;
+	}	
+	
+	List *curr = *list;
+	void *start = (void *)curr;
+	size_t count = 1;
+
+	while(curr && curr->next){
+		char *curr_address = (char *)curr;
+		char *next_address = (char *)curr->next;
+
+		if(next_address == curr_address - block_size){
+			printf("%zu\n", count);
+			count++;
+		}else{
+			count = 1;
+			start = (void *)curr->next;
+		}
+		
+		if(count == block_count){
+			return (void *)next_address;
+		}
+		curr = curr->next;
+	}
+
+	return NULL;
+}
 
 //Split 128KB of memory into blocks
 void split_mem(){
@@ -44,6 +162,7 @@ void split_mem(){
 			b->next = free_list[i];
 			free_list[i] = b;
 			if((uintptr_t)(p + bin_sizes[i]) > (uintptr_t)end){
+				printf("Exeeded the chunk size.\n");
 				break;
 			}
 			p += bin_sizes[i];
@@ -63,6 +182,7 @@ void *look_up(size_t size){
 					*((size_t *)block) = size;
 					void *ptr = (void *)((char*)block + 2 * sizeof(size_t));
 					insert_block(&alloc_list[i], block);
+					alloced_count[i]++;
 					printf("%p, %zu \n", (void *)(block), *((size_t *)block));
 					return ptr;
 				}
@@ -195,6 +315,7 @@ void my_free(void *ptr){
 				if(block == (void *)p){
 					void *freed = remove_block(&alloc_list[i], p);			
 					insert_block(&free_list[i], freed);
+					alloced_count[i]--;
 					return;	
 				}
 				p = p->next;
@@ -243,12 +364,19 @@ void dump_list(List **list){
 int main() {
     	
 	//dump_list(&free_list[1]);
-	//dump_list(&alloc_list[1]);
-	void *ptr = my_malloc(5 * sizeof(int));
-	void *ptr2 = my_malloc(130 *1024);
-	dump_list(&mmap_list);	
-	my_free(ptr);
-	dump_list(&mmap_list);
+	//dump_list(&alloc_list[1])
+	for(int i = 0; i < 25; i++){
+		void *ptr = my_malloc(1024);
+	}
+	printf("%zu\n", alloced_count[MAX_BIN - 2]);
+	dump_list(&free_list[MAX_BIN - 1]);
+        dump_list(&free_list[MAX_BIN - 2]);
+	
+	check_block_counts();
+	printf("%zu\n", alloced_count[MAX_BIN - 2]);
+	dump_list(&free_list[MAX_BIN - 1]);
+        dump_list(&free_list[MAX_BIN - 2]);
+
 	
 	return 0;
 }
