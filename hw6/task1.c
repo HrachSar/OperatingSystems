@@ -23,10 +23,10 @@ int main(){
 	printf("The address of the fourth variable is %p\n", (char *)&s.s);
 
 	printf("The offset of each variable\n");
-	printf("The offset from the struct of first variable is %zu\n", (size_t)&s.i - (size_t)&s);
-	printf("The offset from the struct of second variable is %zu\n", (size_t)&s.c - (size_t)&s.i);
-        printf("The offset from the struct of the third variable is %zu\n", (size_t)&s.d- (size_t)&s.c);
-        printf("The offset from the struct of the fourth variable is %zu\n", (size_t)&s.s - (size_t)&s.d);
+	printf("The offset of first variable is %zu\n", (size_t)&s.i - (size_t)&s);
+	printf("The offset of second variable is %zu\n", (size_t)&s.c - (size_t)&s.i);
+        printf("The offset of the third variable is %zu\n", (size_t)&s.d- (size_t)&s.c);
+        printf("The offset of the fourth variable is %zu\n", (size_t)&s.s - (size_t)&s.d);
 	printf("The size of the struct is %zu\n", sizeof(s));
 
 	return 0;
