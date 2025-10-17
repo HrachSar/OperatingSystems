@@ -89,7 +89,7 @@ int split_blocks(int i){
 int merge_blocks(int i){
 	size_t count_needed = alloced_count[i] - MAX_MEM + 1;
 
-	for(int j = 0; j < i; j++){
+	for(int j = i - 1; j >= 0; j--){
 		if(bin_sizes[i] % bin_sizes[j] == 0){
 			size_t block_count = bin_sizes[i] / bin_sizes[j];
 			size_t actual_count = count_needed * block_count;
@@ -368,12 +368,12 @@ int main() {
 	for(int i = 0; i < 25; i++){
 		void *ptr = my_malloc(1024);
 	}
-	printf("%zu\n", alloced_count[MAX_BIN - 2]);
+	printf("%zu\n", alloced_count[MAX_BIN - 1]);
 	dump_list(&free_list[MAX_BIN - 1]);
         dump_list(&free_list[MAX_BIN - 2]);
 	
 	check_block_counts();
-	printf("%zu\n", alloced_count[MAX_BIN - 2]);
+	printf("%zu\n", alloced_count[MAX_BIN - 1]);
 	dump_list(&free_list[MAX_BIN - 1]);
         dump_list(&free_list[MAX_BIN - 2]);
 
