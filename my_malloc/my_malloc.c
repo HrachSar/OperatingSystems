@@ -3,41 +3,20 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <stdint.h>
-
-#define CHUNK_SIZE    128*1024
-#define PAGE_SIZE     4096
-#define DEFAULT_ALIGN 8
-#define MAX_BIN       12
-#define MAX_MEM	      20
+#include "my_malloc.h"
 
 static void *start = NULL;
 static void *end = NULL;
 
-typedef struct List{
-	size_t size;
-	struct List *next;
-} List;
 
 static size_t bin_sizes[MAX_BIN] = {24, 32, 40, 48, 56, 64, 72, 128, 256, 512, 1024, 2048};
 static size_t bin_count[MAX_BIN] = {30, 31, 30, 30, 30, 30, 30, 31, 31, 31, 31, 30};
-static size_t alloced_count[MAX_BIN] = {0};
+size_t alloced_count[MAX_BIN] = {0};
 static List *free_list[MAX_BIN + 1] = {NULL};
 static List *alloc_list[MAX_BIN + 1] = {NULL};
 static List *mmap_list;
+static int counter = 0;
 
-void split_mem();
-void *look_up(size_t size);
-size_t align_memory(size_t size, size_t alignment);
-void request_chunk();
-void *my_malloc(size_t size);
-void my_free(void *ptr);
-void *remove_block(List **head, List *p);
-void insert_block(List **list, void *ptr);
-void dump_list(List **list);
-void check_block_counts();
-void *get_contigous_blocks(List **list, size_t block_count, size_t block_size);
-int  split_blocks(int i);
-int  merge_blocks(int i);
 
 void check_block_counts(){
 	for(int i = 0; i < MAX_BIN; i++){
@@ -66,7 +45,7 @@ int split_blocks(int i){
 					void *block = remove_block(&free_list[j], free_list[j]);
 					if(!block){
 						printf("Fatal error!\n");
-						return 0;
+						continue;
 					}
 					void *p = block;
 					int l = 0;
@@ -101,7 +80,7 @@ int merge_blocks(int i){
 					void *start = get_contigous_blocks(&free_list[j], block_count, bin_sizes[j]);
 					if(!start){
 						printf("No possible merges of memory blocks\n");
-						return 0;
+						continue;
 					}				
 	
 
@@ -258,6 +237,10 @@ void *my_malloc(size_t size){
 			split_mem();
 			ptr = look_up(aligned_mem);
 		}
+		counter++;
+		if(counter >= MAX_MEM)
+			check_block_counts();
+
 		return ptr;
 	}else{
 		size_t aligned_mem = align_memory(size + 2 * sizeof(size_t), PAGE_SIZE);
@@ -281,7 +264,7 @@ void my_free(void *ptr){
 
 	void *block = (void *)((char *)ptr - 2 * sizeof(size_t));
 	size_t mem_size = *(size_t *)block;
-	
+		
 	//For medium allocations > 2048 bytes
 	if(mem_size > bin_sizes[MAX_BIN - 1] && mem_size < CHUNK_SIZE){
 		List *p = alloc_list[MAX_BIN];
@@ -309,7 +292,7 @@ void my_free(void *ptr){
 	}
 	//Small allocations <= 2048 bytes
 	for(int i = 0; i < MAX_BIN; i++){
-		if(bin_sizes[i] == mem_size){
+		if(bin_sizes[i] >= mem_size){
 			List *p = alloc_list[i];
 			while(p){
 				if(block == (void *)p){
@@ -360,23 +343,14 @@ void dump_list(List **list){
 	}	
 	printf("End of the list\n");
 }
-
+/*
 int main() {
-    	
-	//dump_list(&free_list[1]);
-	//dump_list(&alloc_list[1])
-	for(int i = 0; i < 25; i++){
-		void *ptr = my_malloc(1024);
-	}
-	printf("%zu\n", alloced_count[MAX_BIN - 1]);
-	dump_list(&free_list[MAX_BIN - 1]);
-        dump_list(&free_list[MAX_BIN - 2]);
-	
-	check_block_counts();
-	printf("%zu\n", alloced_count[MAX_BIN - 1]);
-	dump_list(&free_list[MAX_BIN - 1]);
-        dump_list(&free_list[MAX_BIN - 2]);
 
-	
-	return 0;
-}
+	void *ptr1 = my_malloc(32);
+	void *ptr2 = my_malloc(64);
+	void *ptr3 = my_malloc(128);
+	my_free(ptr1);
+	my_free(ptr2);
+	my_free(ptr3);
+	return 0;	
+} */
