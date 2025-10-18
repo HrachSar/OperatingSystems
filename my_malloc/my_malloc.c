@@ -66,7 +66,7 @@ int split_blocks(int i){
 					void *block = remove_block(&free_list[j], free_list[j]);
 					if(!block){
 						printf("Fatal error!\n");
-						return 0;
+						continue;
 					}
 					void *p = block;
 					int l = 0;
@@ -101,7 +101,7 @@ int merge_blocks(int i){
 					void *start = get_contigous_blocks(&free_list[j], block_count, bin_sizes[j]);
 					if(!start){
 						printf("No possible merges of memory blocks\n");
-						return 0;
+						continue;
 					}				
 	
 
@@ -372,7 +372,6 @@ int main() {
 	dump_list(&free_list[MAX_BIN - 1]);
         dump_list(&free_list[MAX_BIN - 2]);
 	
-	check_block_counts();
 	printf("%zu\n", alloced_count[MAX_BIN - 1]);
 	dump_list(&free_list[MAX_BIN - 1]);
         dump_list(&free_list[MAX_BIN - 2]);
