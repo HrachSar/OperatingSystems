@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <limits.h>
 
 typedef struct {
     int pid;
@@ -23,19 +24,36 @@ void sort(Process *proc, int n) {
 void execute(Process *proc, int n){
 	int completion_time[n];
 	int completed[n];
+	short found = 0;
 	for(int i = 0; i < n; i++){
 		completion_time[i] = 0;
 		completed[i] = 0;
 	}
 	int curr_time = 0;
 	int count = 0;
-	for(int i = 0; i < n && count < n; i++){
-		if(proc[i].arrival_time <= curr_time && !completed[i]){
-			completion_time[i] = curr_time + proc[i].burst_time;
-			curr_time += proc[i].burst_time;
-			completed[i] = 1;
-			count++;
-			i = -1;
+	while (1){
+		found = 0;
+		for(int i = 0; i < n; i++){
+			if(proc[i].arrival_time <= curr_time && !completed[i]){
+				completion_time[i] = curr_time + proc[i].burst_time;
+				curr_time += proc[i].burst_time;
+				completed[i] = 1;
+				found = 1;
+				count++;
+				break;
+			}
+		}
+		if(count == n)
+			break;
+		//Handle idle state
+		//Without idle state check I solved in O(n) time 
+		else if(!found){
+			int next_time = INT_MAX;
+			for(int i = 0; i < n; i++){
+				if(proc[i].arrival_time < next_time && !completed[i])
+					next_time = proc[i].arrival_time;
+			}
+			curr_time = next_time;
 		}
 	}
 	for(int i = 0; i < n; i++){
