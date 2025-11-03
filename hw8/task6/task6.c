@@ -7,7 +7,7 @@
 
 int main(){
 
-	int fd = open("numbers.txt", O_CREAT | O_RDWR | O_TRUNC);
+	int fd = open("numbers.txt", O_CREAT | O_WRONLY | O_TRUNC);
 	if(fd == -1){
 		perror("Error on opening numbers.txt.\n");
 		return 1;
