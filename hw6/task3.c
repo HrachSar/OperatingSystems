@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#pragma pack(4)
+#pragma pack(1)
 typedef struct{
 	char a;
 	int b;
