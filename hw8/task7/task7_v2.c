@@ -36,11 +36,13 @@ int main(){
 		int ret1 = read(fd1, buf1, sizeof(buf1));
 		if(ret1 == -1){
 			perror("Error on reading first file.\n");
+			close(fd1);
 			exit(1);
 		}
 		int ret2 = read(fd2, buf2, sizeof(buf2));
 		if(ret2 == -1){
 			perror("Error on reading second file.\n");
+			close(fd2);
 			exit(1);
 		}
 
@@ -49,16 +51,22 @@ int main(){
 		for(int i = 0; i < min; i++){
 			if(buf1[i] != buf2[i]){
 				printf("Files differ at byte %d.\n", i);
+				close(fd1);
+				close(fd2);
 				exit(1);
 			}
 		}
 
 		if(ret1 != ret2){
 			printf("Files differ at byte %d.\n", abs(ret1 - ret2));
+			close(fd1);
+			close(fd2);
 			exit(1);
 		}
 		if(ret1 == 0 && ret2 == 0){
 			printf("Files are identical.\n");
+			close(fd1);
+			close(fd2);
 			exit(0);
 		}
 	}

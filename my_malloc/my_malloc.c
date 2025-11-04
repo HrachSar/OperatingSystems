@@ -228,7 +228,7 @@ void request_chunk(){
 	end = CHUNK_SIZE + chunk;
 }
 
-void *my_malloc_mmap_file(const char* path, size_t size, int flags, off_t mode){
+void *my_mmap_file(const char* path, size_t size, int flags, off_t mode){
 
 	int fd = open(path, flags, mode);
 	if(fd == -1){
@@ -259,6 +259,10 @@ void *my_malloc_mmap_file(const char* path, size_t size, int flags, off_t mode){
         else if(flags & O_RDWR)	prot = PROT_READ | PROT_WRITE;
 
 	void *block = mmap(NULL, aligned_mem, prot, MAP_SHARED, fd, 0);
+	if(block == MAP_FAILED){
+		printf("File mapping error.\n");
+		return NULL;
+	}
 	close(fd);
 
 	void *ptr = (void *)((char *)block + 2 * sizeof(size_t));
@@ -266,6 +270,29 @@ void *my_malloc_mmap_file(const char* path, size_t size, int flags, off_t mode){
 	insert_block(&mmap_list, block);
 
 	return ptr;
+}
+
+void my_munmap_file(void *ptr){
+	if(!ptr){
+		printf("Invalid pointer.\n");
+		return;
+	}
+
+	void *block = (void *)((char *)ptr - 2 * sizeof(size_t));
+	size_t mem_size = *(size_t *)block;
+	
+	List *p = mmap_list;
+	while(p){
+		if(block == (void *)p){
+			void *freed = remove_block(&mmap_list, p);
+			if(munmap(block, mem_size) == -1){
+				printf("Failed to free mapped file.\n");
+				return;
+			}
+			return;
+		}
+		p = p->next;
+	}
 }
 
 //allocate memory

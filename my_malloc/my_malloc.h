@@ -25,7 +25,7 @@ void check_block_counts();
 void *get_contigous_blocks(List **list, size_t block_count, size_t block_size);
 int  split_blocks(int i);
 int  merge_blocks(int i);
-void *my_malloc_mmap_file(const char *path, size_t size, int flags, off_t mode);
-void my_free_mmap_file(void *ptr);
+void *my_mmap_file(const char *path, size_t size, int flags, off_t mode);
+void my_munmap_file(void *ptr);
 
 #endif

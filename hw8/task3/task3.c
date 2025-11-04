@@ -19,6 +19,7 @@ int main(){
 	int ls = lseek(fd, 0, SEEK_END);
 	if(ls == -1){
 		perror("Error on seeking a file.\n");
+		close(fd);
 		return 1;
 	}
 	int ret = 0;	
@@ -28,16 +29,19 @@ int main(){
 	while(-i < ls + 1){
 		if(lseek(fd, i--, SEEK_END) == -1){
 			perror("Error\n");
+			close(fd);
 			return 1;
 		}
 		ret = read(fd, &c, 1);
 		if(ret == -1){
 			perror("Error on reading the file.\n");
+			close(fd);
 			return 1;
 		}
 		nr = write(1, &c, 1);
 		if(nr == -1){
 			perror("Error on writing the file.\n");
+			close(fd);
 			return 1;
 		}
 	}

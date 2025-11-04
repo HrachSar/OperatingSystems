@@ -40,6 +40,8 @@ int main(){
 		for(int i = 0; i < size; i++){
 			if(a[i] != b[i]){
 				printf("Files differ at byte %d.\n", i + count);
+				close(fd1);
+				close(fd2);
 				exit(1);
 			}
 		}

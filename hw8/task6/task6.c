@@ -18,19 +18,22 @@ int main(){
 		int wr = write(fd, &c, 1);
 		if(wr == -1){
 			perror("Error on writing into numbers.txt.\n");
+			close(fd);
 			return 1;
 		}
 		wr = write(fd, "\n", 1);
                 if(wr == -1){
                         perror("Error on writing into numbers.txt.\n");
-                        return 1;
+                        close(fd);
+			return 1;
                 }
 		i++;
 	}
 	int wr = write(fd, "10\n", 3);
         if(wr == -1){
               perror("Error on writing into numbers.txt.\n");
-              return 1;
+              close(fd);
+	      return 1;
 	}
 	close(fd);
 	
@@ -54,7 +57,8 @@ int main(){
 	int ls = lseek(fd2, offset, SEEK_SET);
         if(ls == -1){
                 perror("Error on seeking the file.\n");
-                return 1;
+                close(fd2);
+		return 1;
         }
 	printf("%d", ls);
 	
@@ -64,6 +68,7 @@ int main(){
 	
 	if(rd == -1){
 		perror("Error on reading into buffer.\n");
+		close(fd2);
 		return 1;
 	}
 	*(buff + rd) = '\0';
@@ -71,17 +76,22 @@ int main(){
 	ls = lseek(fd2, offset - 2, SEEK_SET);
 	if(ls == -1){
 		perror("Error on seeking the file.\n");
+		close(fd2);
 		return 1;
 	}
 	wr = write(fd2, "100\n", 4);
         if(wr == -1){
                 perror("Error on writing into the file.\n");
-                return 1;
+                close(fd2);
+		return 1;
         }
 	wr = write(fd2, buff, rd);
 	if(wr == -1){
 		perror("Error on writing into the file.\n");
+		close(fd2);
 		return 1;
 	}
 	close(fd2); 	
+
+	return 0;
 }

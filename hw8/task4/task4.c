@@ -16,9 +16,11 @@ int main(){
 	}
 
 	char buf[256];
+	printf("Enter a text.\n");
 	int rd = read(0, buf, sizeof(buf) - 1); 
 	if(rd == -1){
 		perror("Error on reading from stdin.\n");
+		close(fd);
 		return 1;
 	}
 	*(buf + rd) = '\0';	
@@ -26,28 +28,33 @@ int main(){
 	int wr = write(fd, "PID=", 4);
         if(wr == -1){
                 perror("Error on writing into log.txt.\n");
-                return 1;
+                close(fd);
+		return 1;
         }
 	unsigned int pid = getpid();
         write_fd(pid, fd);
 	wr = write(fd, ":", 1);
         if(wr == -1){
                 perror("Error on writing into log.txt.\n");
-                return 1;
+                close(fd);
+		return 1;
         }
 	wr = write(fd, buf, rd);
 	if(wr == -1){
 		perror("Error on writing into log.txt.\n");
+		close(fd);
 		return 1;
 	}
 	wr = write(fd, "\n", 1);
         if(wr == -1){
 		perror("Error on writing into log.txt.\n");
+		close(fd);
 		return 1;
 	}
 	int ls = lseek(fd, 0, SEEK_CUR);
 	if(ls == -1){
 		perror("Error on seeking log.txt.\n");
+		close(fd);
 		return 1;
 	}
 	write_fd(ls, 1);	
@@ -63,6 +70,7 @@ void write_fd(unsigned int n, int fd){
 	int wr = write(fd, &c, 1);
 	if(wr == -1){
 		perror("Error on writing into log.txt.\n");
+		close(fd);
 		return;
 	}
 }

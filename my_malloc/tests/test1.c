@@ -2,6 +2,9 @@
 #include <CUnit/Basic.h>
 #include <string.h>
 #include <stdint.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include "../my_malloc.h"
 
 void check_block_counts(void);
@@ -57,6 +60,16 @@ void test_large_allocation(void)
     my_free(p);
 }
 
+void test_file_allocation(void){
+	void *p = my_mmap_file("../data.txt", 200 * 1024, O_CREAT | O_RDWR, 0644);
+	CU_ASSERT_PTR_NOT_NULL(p);
+	
+	//printf("%d", getpid());
+	memset(p, 0, 200 * 1024);
+
+	my_munmap_file(p);
+}
+
 extern size_t alloced_count[];
 void test_check_block_counts(void)
 {
@@ -87,6 +100,7 @@ int main()
     CU_add_test(suite, "Reuse Freed Blocks", test_reuse_freed_blocks);
     CU_add_test(suite, "Large mmap Allocation", test_large_allocation);
     CU_add_test(suite, "Block Count Management", test_check_block_counts);
+    CU_add_test(suite, "Large File Mapping", test_file_allocation);
 
     CU_basic_set_mode(CU_BRM_VERBOSE);
     CU_basic_run_tests();

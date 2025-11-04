@@ -16,17 +16,20 @@ int main(){
 	int wd = write(fd, "START", 5);
 	if(wd == -1){
 		perror("Error on writing into file.\n");;
+		close(fd);
 		return 1;
 	}
 	int ls = lseek(fd, 1024*1024, SEEK_CUR);
 	if(ls == -1){
 		perror("Error on seeking file.\n");
+		close(fd);
 		return 1;
 	}
 	wd = write(fd, "END", 3);
         if(wd == -1){
                 perror("Error on writing into file.\n");;
-                return 1;
+                close(fd);
+		return 1;
         }
 	close(fd);
 
@@ -36,6 +39,11 @@ int main(){
 		return 1;
 	}
 	ls = lseek(fd, 0, SEEK_END);
+	if(ls == -1){
+		perror("Error on seeking the file.\n");
+		close(fd);
+		return 1;
+	}
 	printf("size = %d\n", ls);
 
 	close(fd);	

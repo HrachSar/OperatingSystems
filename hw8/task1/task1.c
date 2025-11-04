@@ -32,11 +32,13 @@ int main(){
 	while((ret = read(fd, &c, sizeof(char))) != '\0'){
 		if(ret == -1){
 			perror("Error on reading from the source file.\n");
+			close(fd);
 			return 1;
 		}
 		int nr = write(fd2, &c, sizeof(char));
 		if(nr == -1){
 			perror("Error on writing into the destination file.\n");
+			close(fd2);
 			return 1;
 		}
 		count += nr;
