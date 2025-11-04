@@ -2,6 +2,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include "my_malloc.h"
 
@@ -224,6 +226,46 @@ void request_chunk(){
 	}
 	start = chunk;
 	end = CHUNK_SIZE + chunk;
+}
+
+void *my_malloc_mmap_file(const char* path, size_t size, int flags, off_t mode){
+
+	int fd = open(path, flags, mode);
+	if(fd == -1){
+		perror("Error on opening a file for mapping.\n");
+		close(fd);
+		return NULL;
+	}
+	
+	ssize_t ssize = lseek(fd, 0, SEEK_END);
+	if(ssize == -1){
+		perror("Error on seeking the file.\n");
+		close(fd);
+		return NULL;
+	}
+
+	size_t aligned_mem = align_memory(size + 2 * sizeof(size_t), PAGE_SIZE);
+	
+	if(ssize < aligned_mem){
+		if(ftruncate(fd, aligned_mem) == -1){
+			perror("Error on resizing the file.\n");
+			close(fd);
+			return NULL;
+		}
+	}
+
+	int prot = 0;
+	if(flags & O_RDONLY) prot = PROT_READ;
+        else if(flags & O_RDWR)	prot = PROT_READ | PROT_WRITE;
+
+	void *block = mmap(NULL, aligned_mem, prot, MAP_SHARED, fd, 0);
+	close(fd);
+
+	void *ptr = (void *)((char *)block + 2 * sizeof(size_t));
+	*(size_t *)block = aligned_mem;
+	insert_block(&mmap_list, block);
+
+	return ptr;
 }
 
 //allocate memory
