@@ -64,8 +64,10 @@ void test_file_allocation(void){
 	void *p = my_mmap_file("../data.txt", 200 * 1024, O_CREAT | O_RDWR, 0644);
 	CU_ASSERT_PTR_NOT_NULL(p);
 	
-	//printf("%d", getpid());
+	printf("%d", getpid());
 	memset(p, 0, 200 * 1024);
+
+	while(1);
 
 	my_munmap_file(p);
 }
